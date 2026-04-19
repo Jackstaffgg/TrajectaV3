@@ -1,0 +1,134 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: trajecta_db
+    environment:
+      POSTGRES_DB: telemetry_db
+      POSTGRES_USER: ${DB_USER:-user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-password123}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks:
+      - telemetry-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-user} -d telemetry_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: trajecta_redis
+    ports:
+      - "6379:6379"
+    networks:
+      - telemetry-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: trajecta_broker
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBIT_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBIT_PASS:-guest}
+    networks:
+      - telemetry-network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio
+    container_name: trajecta_minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: admin
+      MINIO_ROOT_PASSWORD: password123
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - telemetry-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  minio-init:
+    image: minio/mc
+    depends_on:
+      minio:
+        condition: service_started
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set myminio http://minio:9000 admin password123; do
+        echo 'Waiting for MinIO...';
+        sleep 2;
+      done;
+      mc mb myminio/flight-data;
+      mc anonymous set public myminio/flight-data;
+      exit 0;
+      "
+    networks:
+      - telemetry-network
+
+  backend:
+    build: .
+    container_name: trajecta_backend
+    depends_on:
+      db:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/telemetry_db
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_DATA_REDIS_HOST: redis
+      MINIO_URL: http://minio:9000
+      JWT_SECRET: ${JWT_SECRET:-super_secret_key_for_trajecta_api_jwt_token}
+      INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-super-secret-1488-worker-token}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+      OPENAI_CHAT_URL: ${OPENAI_CHAT_URL:-https://api.openai.com/v1/chat/completions}
+      OPENAI_CHAT_TIMEOUT_SECONDS: ${OPENAI_CHAT_TIMEOUT_SECONDS:-15}
+      APP_SEED_ENABLED: ${APP_SEED_ENABLED:-true}
+      OWNER_USERNAME: ${OWNER_USERNAME:-Owner}
+      OWNER_PASSWORD: ${OWNER_PASSWORD:-Owner123}
+      OWNER_MAIL: ${OWNER_MAIL:-owner@ownermail.own}
+      APP_SEED_ADMIN_ENABLED: ${APP_SEED_ADMIN_ENABLED:-true}
+      ADMIN_USERNAME: ${ADMIN_USERNAME:-Admin}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-Admin123}
+      ADMIN_MAIL: ${ADMIN_MAIL:-admin@adminmail.own}
+    networks:
+      - telemetry-network
+
+networks:
+  telemetry-network:
+    external: true
+    name: telemetry-network
+
+volumes:
+  pgdata:
+  minio_data:

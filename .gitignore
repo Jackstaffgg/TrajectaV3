@@ -1,0 +1,9 @@
+.env.vps
+.env.vps.*
+!.env.vps.example
+data/
+.idea/
+.DS_Store                                                                                                          
+Thumbs.db                                                                                                             
+Desktop.ini
+test-assets

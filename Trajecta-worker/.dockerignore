@@ -1,0 +1,13 @@
+target/
+.git
+
+# Legacy Python artifacts kept ignored as repository still contains old worker files
+.venv
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.log
+*.bin
+DATA*.BIN
+tests/

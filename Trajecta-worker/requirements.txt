@@ -1,0 +1,4 @@
+numpy>=1.26
+pandas>=2.2
+pymavlink>=2.4
+pika>=1.3

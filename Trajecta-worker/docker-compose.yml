@@ -1,0 +1,32 @@
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    cpus: ${WORKER_CPU_LIMIT:-1.0}
+    mem_limit: ${WORKER_MEM_LIMIT:-1024m}
+    environment:
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://guest:guest@rabbitmq:5672/%2F}
+      REQUEST_EXCHANGE: ${REQUEST_EXCHANGE:-telemetry.exchange}
+      REQUEST_ROUTING_KEY: ${REQUEST_ROUTING_KEY:-telemetry.parse}
+      REQUEST_QUEUE: ${REQUEST_QUEUE:-telemetry.parse}
+      RESULTS_EXCHANGE: ${RESULTS_EXCHANGE:-telemetry.exchange}
+      RESULTS_ROUTING_KEY: ${RESULTS_ROUTING_KEY:-telemetry.results}
+      RESULTS_QUEUE: ${RESULTS_QUEUE:-telemetry.results}
+      API_BASE_URL: ${API_BASE_URL:-http://backend:8080}
+      INTERNAL_WORKER_TOKEN: ${INTERNAL_WORKER_TOKEN:-super-secret-1488-worker-token}
+      WORKER_TOKEN_HEADER: ${WORKER_TOKEN_HEADER:-X-Worker-Token}
+      INTERNAL_RAW_PATH_TEMPLATE: ${INTERNAL_RAW_PATH_TEMPLATE:-/api/internal/v1/tasks/{taskId}/raw}
+      HTTP_TIMEOUT_SECONDS: ${HTTP_TIMEOUT_SECONDS:-30}
+      MAX_RAW_DOWNLOAD_BYTES: ${MAX_RAW_DOWNLOAD_BYTES:-209715200}
+      DOWNLOAD_CHUNK_SIZE_BYTES: ${DOWNLOAD_CHUNK_SIZE_BYTES:-1048576}
+      TIMELINE_DT: ${TIMELINE_DT:-0.1}
+      GROUND_TRUTH_PATH: ${GROUND_TRUTH_PATH:-}
+    networks:
+      - telemetry-network
+
+networks:
+  telemetry-network:
+    external: true
+    name: telemetry-network
